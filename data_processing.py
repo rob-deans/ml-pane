@@ -20,4 +20,8 @@ def get_data():
     for r in df.iterrows():
         data.append(r[1][:-1].values.tolist())
         result.append(r[1][-1:].values.tolist())
-    return np.array(data), np.array(result)
+    return np.array(data), np.array(result), max_, min_
+
+
+def denormalise(val, maxi, mini):
+    return (val * (maxi - mini)) + mini

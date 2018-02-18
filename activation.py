@@ -1,14 +1,69 @@
-import math as maths
+import numpy as np
+from abc import ABCMeta, abstractmethod
 
 
-def relu(i):
-    return i if i > 0 else 0
+class Activation:
+    __metaclass__ = ABCMeta
+
+    @staticmethod
+    @abstractmethod
+    def activation_fn(x):
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def derivative(x):
+        pass
 
 
-def sigmoid(x):
-    return 1 / (1 + maths.exp(-x))
+class Sigmoid(Activation):
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def activation_fn(x):
+        return 1 / (1 + np.exp(-x))
+
+    @staticmethod
+    def derivative(x):
+        return x * (1 - x)
 
 
-def tanh():
-    pass
+class Tanh(Activation):
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def activation_fn(x):
+        return np.tanh(x)
+
+    @staticmethod
+    def derivative(x):
+        return np.arctanh(x)
+
+
+class Relu(Activation):
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def activation_fn(x):
+        return x if x > 0 else 0
+
+    @staticmethod
+    def derivative(x):
+        return 1 if x > 0 else 0
+
+
+class Linear(Activation):
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def activation_fn(x):
+        return x
+
+    @staticmethod
+    def derivative(x):
+        return 1
 

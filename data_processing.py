@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 
-def get_data():
+def get_all_data():
 
     df = pd.read_csv('FresnoClean.csv')
 

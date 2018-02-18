@@ -1,10 +1,9 @@
 import numpy as np
-from data_processing import get_data
+from data_processing import get_all_data
 from data_processing import denormalise
 from activation import Sigmoid
-from activation import Tanh
-from activation import Relu
 from activation import Linear
+from activation import Relu
 
 
 class NoDataException(Exception):
@@ -15,7 +14,7 @@ class NotLayerException(Exception):
     pass
 
 
-data, res, max_, min_ = get_data()
+data, res, max_, min_ = get_all_data()
 
 np.random.seed(1)
 
@@ -59,36 +58,30 @@ class Network:
             self.k.append(layer.ff(self.k[-1]))
         return self.k[-1]
 
-    def optimise(self, actual, print_error_every=-1):
+    def optimise(self, actual):
 
         if self.data is None or self.k == []:
             raise NoDataException
 
-        # how much did we miss the target value?
         # Calculate the error for the output
         kl_error = actual - self.k[-1]
 
-        if print_error_every > 0:
-            if (j % print_error_every) == 0:
-                print "Error:" + str(np.mean(np.abs(kl_error)))
+        mean_error = np.mean(np.abs(kl_error))
 
-        # in what direction is the target value?
-        # were we really sure? if so, don't change too much.
         # Calculate the delta for the final layer
-        kl_delta = kl_error * Sigmoid.derivative(self.k[-1])
+        kl_delta = kl_error * self.layers[-1].activation.derivative(self.k[-1])
 
-        errors = [kl_error]
         deltas = [kl_delta]
 
         for l in range(len(self.layers) - 1, 0, -1):
             layer = self.layers[l]
-            errors.append(deltas[-1].dot(layer.weights.T))
-            deltas.append(errors[-1] * layer.activation.derivative(self.k[1]))
+            errors = deltas[-1].dot(layer.weights.T)
+            deltas.append(errors * layer.activation.derivative(self.k[l]))
 
         for i, layer in enumerate(self.layers):
             layer.update_weights(delta=self.k[i].T.dot(deltas[-(i + 1)] * self.learning_rate))
-        # self.w1 += self.k[0].T.dot(kl_delta * 0.01)
-        # self.w0 += self.data.T.dot(k1_delta * 0.01)
+
+        return mean_error
 
     def save(self):
         pass
@@ -99,21 +92,23 @@ class Network:
 
 layer1 = Layer(inputs=5, units=8, activation=Sigmoid)
 layer2 = Layer(inputs=8, units=8, activation=Sigmoid)
-layer3 = Layer(inputs=8, units=1, activation=Sigmoid)
+layer3 = Layer(inputs=8, units=8, activation=Sigmoid)
+layer4 = Layer(inputs=8, units=1, activation=Linear)
 
-network = Network(learning_rate=0.01, layers=[layer1, layer2, layer3])
+network = Network(learning_rate=0.0001, layers=[layer1, layer2, layer3, layer4])
 
-for j in xrange(200000):
+for j in xrange(1000000):
 
     # Feed forward through layers 0, 1, and 2
     k2 = network.run(data)
-    network.optimise(res, print_error_every=10000)
+    _error = network.optimise(res)
+    if (j % 100000) == 0:
+        print "Error:" + str(np.mean(np.abs(_error)))
 
 
 for i, d in enumerate(data[-10:]):
     k0 = network.run(d)
-    result = Sigmoid.derivative(k0)
-    result_de = denormalise(result, max_.values.tolist()[-1], min_.values.tolist()[-1])
+    result_de = denormalise(k0, max_.values.tolist()[-1], min_.values.tolist()[-1])
     actual_de = denormalise(res[-10:][i], max_.values.tolist()[-1], min_.values.tolist()[-1])
     error = result_de - actual_de
     print('Predicted: {} | Actual: {} | Error: {}'.format(result_de, actual_de, np.abs(error)))

@@ -8,12 +8,12 @@ class Activation:
     @staticmethod
     @abstractmethod
     def activation_fn(x):
-        pass
+        raise NotImplementedError
 
     @staticmethod
     @abstractmethod
     def derivative(x):
-        pass
+        raise NotImplementedError
 
 
 class Sigmoid(Activation):
@@ -48,11 +48,14 @@ class Relu(Activation):
 
     @staticmethod
     def activation_fn(x):
-        return x if x > 0 else 0
+        return np.maximum(np.zeros_like(x), x)
 
     @staticmethod
     def derivative(x):
-        return 1 if x > 0 else 0
+        def get_map(y):
+            return 1 if y > 0 else 0
+        vfunc = np.vectorize(get_map)
+        return vfunc(x)
 
 
 class Linear(Activation):

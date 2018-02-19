@@ -6,6 +6,8 @@ def get_all_data():
 
     df = pd.read_csv('FresnoClean.csv')
 
+    # df = df.drop('W', 1)
+
     max_ = df.max()
     min_ = df.min()
 
@@ -16,11 +18,9 @@ def get_all_data():
 
     df = df.apply(normalise, axis=1)
     data = []
-    result = []
     for r in df.iterrows():
-        data.append(r[1][:-1].values.tolist())
-        result.append(r[1][-1:].values.tolist())
-    return np.array(data), np.array(result), max_, min_
+        data.append(r[1].values.tolist())
+    return np.array(data), max_, min_
 
 
 def denormalise(val, maxi, mini):

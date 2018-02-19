@@ -14,25 +14,30 @@ class NotLayerException(Exception):
     pass
 
 
-data, res, max_, min_ = get_all_data()
+data, max_, min_ = get_all_data()
+np.random.shuffle(data)
+training = data[:int(len(data)*0.7)]
+test = data[int(len(data)*0.7):]
 
-np.random.seed(1)
+training_data = training[:, :-1]
+training_res = training[:, -1:]
+test_data = test[:, :-1]
+test_res = test[:, -1:]
 
 
 class Layer:
-    def __init__(self, inputs, units, activation, initialiser_fn='default'):
+    def __init__(self, inputs, units, activation, name=None):
         self.inputs = inputs
         self.units = units
         self.activation = activation
-        self.initialiser_fn = initialiser_fn
+        self.name = name
+        if self.name is None:
+            self.name = 'layer_{}_{}'.format(self.inputs, self.units)
 
-        self.weights = 2 * np.random.random((self.inputs, self.units)) - 1
+        self.weights = np.random.normal(0, 0.01, (self.inputs, self.units))
 
     def ff(self, values):
         return self.activation.activation_fn(np.dot(values, self.weights))
-
-    def delta(self, actual):
-        pass
 
     def update_weights(self, delta):
         self.weights += delta
@@ -44,11 +49,14 @@ class Network:
         self.data = None
         self.learning_rate = learning_rate
         if layers is None:
-            raise NotLayerException
+            raise Exception('No layers specified')
         self.layers = layers
-        # print(type(self.layers[0]))
-        # if any(isinstance(x, Layer) for x in self.layers):
-        #     raise NotLayerException
+
+        for l in range(1, len(self.layers)):
+            if self.layers[l].inputs != self.layers[l-1].units:
+                raise Exception('{} does not have the same number of inputs ({}) as {} has units ({})'.format(
+                    self.layers[l].name, self.layers[l].inputs, self.layers[l-1].name, self.layers[l-1].units
+                ))
 
     def run(self, values):
         self.data = values
@@ -90,26 +98,31 @@ class Network:
         pass
 
 
-layer1 = Layer(inputs=5, units=8, activation=Sigmoid)
-layer2 = Layer(inputs=8, units=8, activation=Sigmoid)
-layer3 = Layer(inputs=8, units=8, activation=Sigmoid)
-layer4 = Layer(inputs=8, units=1, activation=Linear)
+num_inputs = len(training_data[1])
+layer1 = Layer(inputs=num_inputs, units=8, activation=Sigmoid, name='input')
+layer2 = Layer(inputs=8, units=8, activation=Sigmoid, name='hidden1')
+layer3 = Layer(inputs=8, units=8, activation=Sigmoid, name='hidden2')
+layer4 = Layer(inputs=8, units=1, activation=Linear, name='output')
 
-network = Network(learning_rate=0.0001, layers=[layer1, layer2, layer3, layer4])
+network = Network(learning_rate=1e-3, layers=[layer1, layer2, layer3, layer4])
 
-for j in xrange(1000000):
+for j in xrange(500000):
 
     # Feed forward through layers 0, 1, and 2
-    k2 = network.run(data)
-    _error = network.optimise(res)
-    if (j % 100000) == 0:
+    k2 = network.run(training_data)
+    # k2 = network.run(data)
+    _error = network.optimise(training_res)
+    if (j % 50000) == 0:
         print "Error:" + str(np.mean(np.abs(_error)))
 
 
-for i, d in enumerate(data[-10:]):
+k0 = network.run(test_data)
+error_rate = k0 - test_res
+print(np.mean(np.abs(error_rate)))
+for i, d in enumerate(test_data[-10:]):
     k0 = network.run(d)
     result_de = denormalise(k0, max_.values.tolist()[-1], min_.values.tolist()[-1])
-    actual_de = denormalise(res[-10:][i], max_.values.tolist()[-1], min_.values.tolist()[-1])
+    actual_de = denormalise(test_res[-10:][i], max_.values.tolist()[-1], min_.values.tolist()[-1])
     error = result_de - actual_de
     print('Predicted: {} | Actual: {} | Error: {}'.format(result_de, actual_de, np.abs(error)))
 

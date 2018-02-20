@@ -12,7 +12,7 @@ class Error:
 
     @staticmethod
     @abstractmethod
-    def derivative():
+    def derivative(x, y):
         raise NotImplementedError
 
 
@@ -23,25 +23,24 @@ class Adaline(Error):
         return x - y
 
     @staticmethod
-    def derivative():
+    def derivative(x, y):
         pass
 
 
-class MSE(Error):
+class SE(Error):
 
     @staticmethod
-    def error(x, y):
+    def error(actual, predicted):
         # n = len(x)
         # absolute = x - y
         # squared = absolute**2
         # summed = np.sum(squared)
         # mean = summed / n
-        mean = np.square(np.subtract(x, y)).mean()
-        return np.full_like(x, mean)
+        return np.square(np.subtract(actual, predicted))
 
     @staticmethod
-    def derivative():
-        pass
+    def derivative(actual, predicted):
+        return 2 * (predicted - actual)
 
 
 class RMSE(Error):
@@ -55,6 +54,6 @@ class RMSE(Error):
         return np.sqrt(summed / n)
 
     @staticmethod
-    def derivative():
+    def derivative(x, y):
         pass
 

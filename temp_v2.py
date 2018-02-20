@@ -44,23 +44,25 @@ class Layer:
             self.name = 'layer_{}_{}'.format(self.inputs, self.units)
 
         self.weights = np.random.normal(0, 0.01, (self.inputs, self.units))
+        self.biases = np.random.normal(0, size=self.units)
 
     def ff(self, values):
-        return self.activation.activation_fn(np.dot(values, self.weights))
+        return self.activation.activation_fn(np.dot(values, self.weights) + self.biases)
 
-    def update_weights(self, delta):
-        self.weights += delta
+    def update(self, delta, bias_delta):
+        self.weights -= delta
+        self.biases -= bias_delta
 
 
 class Network:
-    def __init__(self, learning_rate=0.1, layers=None, error_function=None):
+    def __init__(self, learning_rate=0.1, layers=None, cost_function=None):
         self.k = []
         self.data = None
         self.learning_rate = learning_rate
         if layers is None:
             raise Exception('No layers specified')
         self.layers = layers
-        self.error_function = error_function.error
+        self.cost_function = cost_function
 
         for l in range(1, len(self.layers)):
             if self.layers[l].inputs != self.layers[l-1].units:
@@ -81,24 +83,38 @@ class Network:
         if self.data is None or self.k == []:
             raise NoDataException
 
+        predicted = self.k[-1]
         # Calculate the error for the output
-        # kl_error = actual - self.k[-1]
-        kl_error = self.error_function(actual, self.k[-1])
+        # kl_error = self.cost_function.error(actual, predicted)
 
-        mean_error = np.mean(np.abs(kl_error))
+        mean_error = (actual - predicted)
 
-        # Calculate the delta for the final layer
-        kl_delta = kl_error * self.layers[-1].activation.derivative(self.k[-1])
+        cost_deriv_1 = self.cost_function.derivative(actual, predicted)
 
-        deltas = [kl_delta]
+        activation_deriv_1 = self.layers[-1].activation.derivative(predicted)
 
-        for l in range(len(self.layers) - 1, 0, -1):
-            layer = self.layers[l]
-            errors = deltas[-1].dot(layer.weights.T)
-            deltas.append(errors * layer.activation.derivative(self.k[l]))
+        weight_derivs_1 = np.array([[d] for d in self.k[1]])
 
-        for l, layer in enumerate(self.layers):
-            layer.update_weights(delta=self.k[l].T.dot(deltas[-(l + 1)] * self.learning_rate))
+        # weights/bias change for the last layer
+        weight_change = cost_deriv_1 * activation_deriv_1 * weight_derivs_1
+        bias_change = cost_deriv_1 * activation_deriv_1
+
+        self.layers[1].update(weight_change * self.learning_rate, bias_change * self.learning_rate)
+
+        activation_deriv_2 = self.layers[0].activation.derivative(self.k[1])
+
+        temp = cost_deriv_1 * activation_deriv_1 * self.k[1] * activation_deriv_2
+        weight_change_2 = []
+        for i in range(5):
+            holder = []
+            for k in range(len(temp)):
+                holder.append(temp[k] * self.k[0][i])
+            weight_change_2.append(holder)
+
+        weight_change_2 = np.array(weight_change_2)
+        bias_change_2 = cost_deriv_1 * activation_deriv_1 * activation_deriv_2
+
+        self.layers[0].update(weight_change_2 * self.learning_rate, bias_change_2 * self.learning_rate)
 
         return mean_error
 
@@ -113,18 +129,20 @@ num_inputs = len(training_data[1])
 layer1 = Layer(inputs=num_inputs, units=8, activation=Sigmoid, name='input')
 layer2 = Layer(inputs=8, units=8, activation=Sigmoid, name='hidden1')
 layer3 = Layer(inputs=8, units=8, activation=Sigmoid, name='hidden2')
-layer4 = Layer(inputs=8, units=1, activation=Linear, name='output')
+layer4 = Layer(inputs=8, units=1, activation=Sigmoid, name='output')
 
-network = Network(learning_rate=1e-3, layers=[layer1, layer2, layer3, layer4], error_function=Adaline)
+network = Network(learning_rate=1e-3, layers=[layer1, layer4], cost_function=SE)
 # network = Network(learning_rate=1e-3, layers=[layer1, layer4], error_function=Adaline)
 
-for j in xrange(500000):
+for j in xrange(100000):
     # for b in xrange(100):
     # Feed forward through layers 0, 1, and 2
-    k2 = network.run(training_data)
-    _error = network.optimise(training_res)
+    error = []
+    for i in range(len(training_data)):
+        k2 = network.run(training_data[i])
+        error.append(network.optimise(training_res[i]))
     if (j % 10000) == 0:
-        print "Error:" + str(np.mean(np.abs(_error)))
+        print "Error:" + str(np.mean(np.abs(error)))
 
 
 k0 = network.run(test_data)

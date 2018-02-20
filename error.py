@@ -31,11 +31,6 @@ class SE(Error):
 
     @staticmethod
     def error(actual, predicted):
-        # n = len(x)
-        # absolute = x - y
-        # squared = absolute**2
-        # summed = np.sum(squared)
-        # mean = summed / n
         return np.square(np.subtract(actual, predicted))
 
     @staticmethod

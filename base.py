@@ -84,11 +84,9 @@ class Network:
             raise NoDataException
 
         predicted = self.k[-1]
-        # Calculate the error for the output
-        # kl_error = self.cost_function.error(actual, predicted)
 
         # Error for printing out during training
-        absolute_error = self.cost_function.error(actual, predicted)
+        cost = self.cost_function.error(actual, predicted)
 
         cost_derive_1 = self.cost_function.derivative(actual, predicted)
         activation_derive_1 = self.layers[-1].activation.derivative(predicted)
@@ -102,21 +100,7 @@ class Network:
 
         self.layers[-1].update(weight_change * self.learning_rate, bias_change * self.learning_rate)
 
-        # activation_derive_2 = self.layers[0].activation.derivative(self.k[1])
-        # accumulative_derive *= activation_derive_2
-
-        # weight_change_2 = []
-        # for i in range(5):
-        #     holder = []
-        #     for k in range(len(accumulative_derive)):
-        #         holder.append(accumulative_derive[k] * self.k[0][i])
-        #     weight_change_2.append(holder)
-
-        # weight_change_2 = np.array(weight_change_2)
-        # bias_change_2 = cost_derive_1 * activation_derive_1 * activation_derive_2
-        #
-        # self.layers[0].update(weight_change_2 * self.learning_rate, bias_change_2 * self.learning_rate)
-
+        # No for each layer calculate the derivative etc
         for l in range(len(self.layers) - 1, 0, -1):
             layer = self.layers[l-1]
             activation_derive = layer.activation.derivative(self.k[l])
@@ -128,13 +112,14 @@ class Network:
                 for k in range(len(accumulative_derive)):
                     holder.append(accumulative_derive[k] * self.k[l-1][i])
                 weight_change.append(holder)
+            # weight_change = [[d] * accumulative_derive for d in accumulative_derive]
 
             weight_change = np.array(weight_change)
             bias_change = accumulative_derive
 
             layer.update(weight_change * self.learning_rate, bias_change * self.learning_rate)
 
-        return absolute_error
+        return cost
 
     def save(self):
         pass
@@ -144,23 +129,25 @@ class Network:
 
 
 num_inputs = len(training_data[1])
-layer_in = Layer(inputs=num_inputs, units=8, activation=Sigmoid, name='input')
-layer2 = Layer(inputs=8, units=8, activation=Sigmoid, name='hidden1')
-layer_out = Layer(inputs=8, units=1, activation=Linear, name='output')
+layer_in = Layer(inputs=num_inputs, units=10, activation=Sigmoid, name='input')
+layer_out = Layer(inputs=10, units=1, activation=Linear, name='output')
 
-network = Network(learning_rate=1e-3, layers=[layer_in, layer2, layer_out], cost_function=SE)
-# network = Network(learning_rate=1e-3, layers=[layer1, layer4], error_function=Adaline)
+network = Network(learning_rate=1e-4, layers=[layer_in, layer_out], cost_function=MSE)
 
-for j in xrange(10000):
-    # for b in xrange(100):
-    # Feed forward through layers 0, 1, and 2
+for j in xrange(5000):
     error = []
     for i in range(len(training_data)):
-        k2 = network.run(training_data[i])
+        _ = network.run(training_data[i])
         error.append(network.optimise(training_res[i]))
-    if (j % 100) == 0:
+    if (j % 1000) == 0:
         print "Squared Error:" + str(np.mean(np.abs(error)))
 
+# for j in xrange(25000):
+#     error = []
+#     _ = network.run(training_data)
+#     error.append(network.optimise(training_res))
+#     if (j % 1000) == 0:
+#         print "Squared Error:" + str(np.mean(np.abs(error)))
 
 k0 = network.run(test_data)
 error_rate = k0 - test_res

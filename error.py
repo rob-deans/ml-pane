@@ -27,11 +27,11 @@ class Adaline(Error):
         pass
 
 
-class SE(Error):
+class MSE(Error):
 
     @staticmethod
     def error(actual, predicted):
-        return np.square(np.subtract(actual, predicted))
+        return np.mean(np.square(np.subtract(actual, predicted)))
 
     @staticmethod
     def derivative(actual, predicted):

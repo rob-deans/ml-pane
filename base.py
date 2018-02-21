@@ -134,13 +134,13 @@ layer_out = Layer(inputs=10, units=1, activation=Linear, name='output')
 
 network = Network(learning_rate=1e-4, layers=[layer_in, layer_out], cost_function=MSE)
 
-for j in xrange(5000):
+for j in xrange(50000):
     error = []
     for i in range(len(training_data)):
         _ = network.run(training_data[i])
         error.append(network.optimise(training_res[i]))
     if (j % 1000) == 0:
-        print "Squared Error:" + str(np.mean(np.abs(error)))
+        print "(j) - Squared Error:" + str(np.mean(np.abs(error)))
 
 # for j in xrange(25000):
 #     error = []

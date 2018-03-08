@@ -18,6 +18,8 @@ data, max_, min_ = get_all_data()
 np.random.seed(1)
 np.random.shuffle(data)
 
+data = np.insert(data, 0, 1., axis=1)
+
 TRAINING_PERCENTAGE = 0.6
 DATA_LENGTH = len(data)
 TRAINING_SIZE = int(DATA_LENGTH * TRAINING_PERCENTAGE)
@@ -35,119 +37,92 @@ test_res = test[:, -1:]
 
 
 class Layer:
-    def __init__(self, inputs, units, activation, name=None):
+
+    momentum = False
+
+    def __init__(self, inputs, units, activation=None, name=None):
         self.inputs = inputs
         self.units = units
-        self.activation = activation
+        self.activation = activation if activation is not None else Linear
         self.name = name
+        self.last_weight_change = 0
         if self.name is None:
             self.name = 'layer_{}_{}'.format(self.inputs, self.units)
 
         self.weights = np.random.normal(0, 0.01, (self.inputs, self.units))
-        self.biases = np.random.normal(0, size=self.units)
 
     def ff(self, values):
-        return self.activation.activation_fn(np.dot(values, self.weights) + self.biases)
+        return self.activation.activation_fn(np.dot(values, self.weights))
 
-    def update(self, delta, bias_delta):
-        self.weights -= delta
-        self.biases -= bias_delta
+    def update(self, delta):
+        self.weights += delta
+        if Layer.momentum:
+            self.weights += self.last_weight_change * 0.9
+            self.last_weight_change = delta
 
 
 class Network:
-    def __init__(self, learning_rate=0.1, layers=None, cost_function=None):
-        self.k = []
-        self.data = None
-        self.learning_rate = learning_rate
+    def __init__(self, learning_rate=0.1, layers=None, optimiser=None, momentum=False, annealing=None):
+
         if layers is None:
             raise Exception('No layers specified')
-        self.layers = layers
-        self.cost_function = cost_function
 
-        for l in range(1, len(self.layers)):
-            if self.layers[l].inputs != self.layers[l-1].units:
+        if momentum and annealing is not None:
+            raise Exception('Cannot have both momentum and annealing')
+
+        for l in range(1, len(layers)):
+            if layers[l].inputs != layers[l-1].units:
                 raise Exception('{} does not have the same number of inputs ({}) as {} has units ({})'.format(
-                    self.layers[l].name, self.layers[l].inputs, self.layers[l-1].name, self.layers[l-1].units
+                    layers[l].name, layers[l].inputs, layers[l-1].name, layers[l-1].units
                 ))
 
+        self.momentum = momentum
+        Layer.momentum = self.momentum
+        self.layers = layers
+
+        self.optimiser = optimiser
+
+        self.optimise = self.optimiser.optimise
+        self.optimiser.layers = self.layers
+        self.optimiser.learning_rate = learning_rate
+
     def run(self, values):
-        self.data = values
-        del self.k[:]
-        self.k.append(self.data)
+        k = [np.array(values)]
         for layer in self.layers:
-            self.k.append(layer.ff(self.k[-1]))
-        return self.k[-1]
+            k.append(layer.ff(k[-1]))
+        self.optimiser.k = k
+        return k[-1]
 
-    def optimise(self, actual):
-
-        if self.data is None or self.k == []:
-            raise NoDataException
-
-        predicted = self.k[-1]
-
-        # Error for printing out during training
-        cost = self.cost_function.error(actual, predicted)
-
-        cost_derive_1 = self.cost_function.derivative(actual, predicted)
-        activation_derive_1 = self.layers[-1].activation.derivative(predicted)
-
-        # weights/bias change for the last layer
-        accumulative_derive = cost_derive_1 * activation_derive_1 * self.k[1]
-
-        # convert to the correct shape for the multiplying
-        weight_change = np.array([[d] for d in accumulative_derive])
-        bias_change = cost_derive_1 * activation_derive_1
-
-        self.layers[-1].update(weight_change * self.learning_rate, bias_change * self.learning_rate)
-
-        # No for each layer calculate the derivative etc
-        for l in range(len(self.layers) - 1, 0, -1):
-            layer = self.layers[l-1]
-            activation_derive = layer.activation.derivative(self.k[l])
-            accumulative_derive *= activation_derive
-
-            weight_change = []
-            for i in range(layer.inputs):
-                holder = []
-                for k in range(len(accumulative_derive)):
-                    holder.append(accumulative_derive[k] * self.k[l-1][i])
-                weight_change.append(holder)
-            # weight_change = [[d] * accumulative_derive for d in accumulative_derive]
-
-            weight_change = np.array(weight_change)
-            bias_change = accumulative_derive
-
-            layer.update(weight_change * self.learning_rate, bias_change * self.learning_rate)
-
-        return cost
-
-    def save(self):
-        pass
-
-    def load(self):
-        pass
+    def __str__(self):
+        return 'Network: Layers: {} | LR: {} | Momentum: {}'.format(
+            len(self.layers),
+            self.optimiser.learning_rate,
+            self.momentum
+        )
 
 
 num_inputs = len(training_data[1])
-layer_in = Layer(inputs=num_inputs, units=10, activation=Sigmoid, name='input')
-layer_out = Layer(inputs=10, units=1, activation=Linear, name='output')
+layer_in = Layer(inputs=num_inputs, units=8, activation=Sigmoid, name='input')
+layer_1 = Layer(inputs=8, units=8, activation=Sigmoid, name='hidden')
+layer_out = Layer(inputs=8, units=1, activation=Linear, name='output')
+annealing = Annealing(start=1e-1, end=1e-3, epochs=5000)
 
-network = Network(learning_rate=1e-4, layers=[layer_in, layer_out], cost_function=MSE)
+network = Network(learning_rate=1e-1,
+                  layers=[layer_in, layer_1, layer_out],
+                  optimiser=GradientDescent(cost_function=MSE),
+                  momentum=True
+                  )
+print(network)
 
-for j in xrange(50000):
+for j in xrange(5000):
     error = []
+    network.optimiser.learning_rate = annealing.anneal(j)
     for i in range(len(training_data)):
-        _ = network.run(training_data[i])
-        error.append(network.optimise(training_res[i]))
-    if (j % 1000) == 0:
-        print "(j) - Squared Error:" + str(np.mean(np.abs(error)))
-
-# for j in xrange(25000):
-#     error = []
-#     _ = network.run(training_data)
-#     error.append(network.optimise(training_res))
-#     if (j % 1000) == 0:
-#         print "Squared Error:" + str(np.mean(np.abs(error)))
+        _ = network.run([training_data[i]])
+        error.append(network.optimise([training_res[i]]))
+    if (j % 100) == 0:
+        print '({}) - Error: {}'.format(j, np.mean(np.abs(error)))
+        print(network.optimiser.learning_rate)
 
 k0 = network.run(test_data)
 error_rate = k0 - test_res

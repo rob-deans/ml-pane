@@ -29,7 +29,7 @@ class Sigmoid(Activation):
         return x * (1 - x)
 
 
-class Tanh(Activation):
+class TanH(Activation):
     def __init__(self):
         pass
 
@@ -39,10 +39,24 @@ class Tanh(Activation):
 
     @staticmethod
     def derivative(x):
-        return np.arctanh(x)
+        return 1 - np.tanh(x) ** 2
 
 
-class Relu(Activation):
+class ReLu(Activation):
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def activation_fn(x):
+        return np.maximum(np.zeros_like(x), x)
+
+    @staticmethod
+    def derivative(x):
+        x[x < 0] = 0
+        return x
+
+
+class LeakyReLu(Activation):
     def __init__(self):
         pass
 
@@ -53,9 +67,9 @@ class Relu(Activation):
     @staticmethod
     def derivative(x):
         def get_map(y):
-            return 1 if y > 0 else 0
-        vfunc = np.vectorize(get_map)
-        return vfunc(x)
+            return 1 if y > 0 else 0.01 * y
+        v = np.vectorize(get_map)
+        return v(x)
 
 
 class Linear(Activation):

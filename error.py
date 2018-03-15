@@ -77,9 +77,6 @@ class GradientDescent(Optimiser):
     def optimise(self, actual):
         # Calculate the error for the output
         cost_derivative = self.cost_function.derivative(actual, self.k[-1])
-        # error = self.cost_function.error(actual, self.k[-1])
-
-        # mean_error = np.mean(np.abs(cost_derivative))
 
         # Calculate the delta for the final layer
         output_delta = cost_derivative * self.layers[-1].activation.derivative(self.k[-1])
@@ -88,15 +85,19 @@ class GradientDescent(Optimiser):
 
         for l in range(len(self.layers) - 1, 0, -1):
             layer = self.layers[l]
+            # Calculate the error based on the delta and the weights
             error = deltas[-1].dot(layer.weights.T)
-            deltas.append(error * layer.activation.derivative(self.k[l]))
+            # Calculate the delta based on the activation on that layer
+            deltas.append(error * self.layers[l-1].activation.derivative(self.k[l]))
 
         deltas = list(reversed(deltas))
 
+        # Go through the layers and update the weights
         for l, layer in enumerate(self.layers):
             layer.update(self.k[l].T.dot(deltas[l]) * self.learning_rate)
 
-        return cost_derivative
+        # Return the error
+        return self.cost_function.error(actual, self.k[-1])
 
 
 class Annealing:

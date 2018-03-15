@@ -6,8 +6,6 @@ def get_all_data():
 
     df = pd.read_csv('FresnoClean.csv')
 
-    # df = df.drop('W', 1)
-
     max_ = df.max()
     min_ = df.min()
 

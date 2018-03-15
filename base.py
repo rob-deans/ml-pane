@@ -1,8 +1,6 @@
-import numpy as np
 from data_processing import get_all_data
 from data_processing import denormalise
-from activation import Sigmoid
-from activation import Linear
+from activation import *
 from error import *
 
 
@@ -14,26 +12,34 @@ class NotLayerException(Exception):
     pass
 
 
-data, max_, min_ = get_all_data()
-np.random.seed(1)
-np.random.shuffle(data)
+def get_data_set(training_percentage=.6, validation_percentage=0., add_biases=True):
+    data, max_, min_ = get_all_data()
+    np.random.seed(1)
+    np.random.shuffle(data)
 
-data = np.insert(data, 0, 1., axis=1)
+    if add_biases:
+        data = np.insert(data, 0, 1., axis=1)
 
-TRAINING_PERCENTAGE = 0.6
-DATA_LENGTH = len(data)
-TRAINING_SIZE = int(DATA_LENGTH * TRAINING_PERCENTAGE)
+    data_length = len(data)
+    training_size = int(data_length * training_percentage)
+    validation_size = int(data_length * validation_percentage)
 
-training = data[:TRAINING_SIZE]
-test = data[TRAINING_SIZE:]
+    training = data[:training_size]
+    if validation_percentage > 0:
+        validation = data[training_size:training_size + validation_size]
+        test = data[training_size + validation_size:]
+    else:
+        validation = []
+        test = data[training_size:]
 
-# training = data[:1000]
-# test = data[1000:]
+    training_data = training[:, :-1]
+    training_res = training[:, -1:]
+    test_data = test[:, :-1]
+    test_res = test[:, -1:]
+    validation_data = validation[:, :-1]
+    validation_res = validation[:, -1:]
 
-training_data = training[:, :-1]
-training_res = training[:, -1:]
-test_data = test[:, :-1]
-test_res = test[:, -1:]
+    return training_data, training_res, test_data, test_res, validation_data, validation_res, (max_, min_)
 
 
 class Layer:
@@ -51,7 +57,7 @@ class Layer:
 
         self.weights = np.random.normal(0, 0.01, (self.inputs, self.units))
 
-    def ff(self, values):
+    def feed_forward(self, values):
         return self.activation.activation_fn(np.dot(values, self.weights))
 
     def update(self, delta):
@@ -60,15 +66,20 @@ class Layer:
             self.weights += self.last_weight_change * 0.9
             self.last_weight_change = delta
 
+    def __str__(self):
+        return 'Layer {} | Inputs: {} | Units: {} | Activation: {}'.format(
+            self.name,
+            self.inputs,
+            self.units,
+            self.activation
+        )
+
 
 class Network:
-    def __init__(self, learning_rate=0.1, layers=None, optimiser=None, momentum=False, annealing=None):
+    def __init__(self, learning_rate=0.1, layers=None, optimiser=None, momentum=False):
 
         if layers is None:
             raise Exception('No layers specified')
-
-        if momentum and annealing is not None:
-            raise Exception('Cannot have both momentum and annealing')
 
         for l in range(1, len(layers)):
             if layers[l].inputs != layers[l-1].units:
@@ -89,48 +100,77 @@ class Network:
     def run(self, values):
         k = [np.array(values)]
         for layer in self.layers:
-            k.append(layer.ff(k[-1]))
+            k.append(layer.feed_forward(k[-1]))
         self.optimiser.k = k
         return k[-1]
 
     def __str__(self):
-        return 'Network: Layers: {} | LR: {} | Momentum: {}'.format(
-            len(self.layers),
+        return 'Network layers: {} | Layers: {} | LR: {} | Momentum: {}'.format(
+            len(self.layers) + 1,
+            [str(layer) for layer in self.layers],
             self.optimiser.learning_rate,
             self.momentum
         )
 
 
-num_inputs = len(training_data[1])
-layer_in = Layer(inputs=num_inputs, units=8, activation=Sigmoid, name='input')
-layer_1 = Layer(inputs=8, units=8, activation=Sigmoid, name='hidden')
-layer_out = Layer(inputs=8, units=1, activation=Linear, name='output')
-annealing = Annealing(start=1e-1, end=1e-3, epochs=5000)
+training_set, training_set_res, test_set, test_set_res, validation_set, validation_set_res, max_min = get_data_set(validation_percentage=.2)
+
+num_inputs = len(training_set[1])
+layer_in = Layer(inputs=num_inputs, units=12, activation=LeakyReLu, name='input')
+layer_out = Layer(inputs=12, units=1, activation=Linear, name='output')
+annealing = Annealing(start=1e-1, end=1e-4, epochs=10000)
 
 network = Network(learning_rate=1e-1,
-                  layers=[layer_in, layer_1, layer_out],
+                  layers=[layer_in, layer_out],
                   optimiser=GradientDescent(cost_function=MSE),
                   momentum=True
                   )
 print(network)
 
-for j in xrange(5000):
-    error = []
-    network.optimiser.learning_rate = annealing.anneal(j)
-    for i in range(len(training_data)):
-        _ = network.run([training_data[i]])
-        error.append(network.optimise([training_res[i]]))
-    if (j % 100) == 0:
-        print '({}) - Error: {}'.format(j, np.mean(np.abs(error)))
-        print(network.optimiser.learning_rate)
+# for j in xrange(10000):
+#     error = []
+#     network.optimiser.learning_rate = annealing.anneal(j)
+#     for i in range(len(training_set)):
+#         _ = network.run([training_set[i]])
+#         error.append(network.optimise([training_set_res[i]]))
+#     if (j % 100) == 0:
+#         print '({}) - Error: {}'.format(j, np.mean(np.abs(error)))
+#         print(network.optimiser.learning_rate)
 
-k0 = network.run(test_data)
-error_rate = k0 - test_res
+epoch = 0
+previous_validation_error = 0
+while True and epoch < 20000:
+    error = []
+    validation_error = []
+    network.optimiser.learning_rate = annealing.anneal(epoch)
+    for i in range(len(training_set)):
+        _ = network.run([training_set[i]])
+        error.append(network.optimise([training_set_res[i]]))
+    if epoch == 500:
+        previous_validation_error = np.mean(np.abs(error))
+    if (epoch - 500) % 200 == 0 and epoch > 500:
+        print('Testing the validation set')
+        validation_result = network.run(validation_set)
+        validation_error.append(validation_result - validation_set_res)
+        if np.mean(np.abs(error)) > previous_validation_error:
+            print('Validation set gone up')
+            break
+
+    if epoch % 100 == 0:
+        print '({}) - Error: {}'.format(epoch, np.mean(np.abs(error)))
+        print(network.optimiser.learning_rate)
+    epoch += 1
+
+k1 = network.run(training_set)
+error_rate_1 = k1 - training_set_res
+print(np.mean(np.abs(error_rate_1)))
+k0 = network.run(test_set)
+error_rate = k0 - test_set_res
 print(np.mean(np.abs(error_rate)))
-for i, d in enumerate(test_data[-10:]):
+for i, d in enumerate(test_set[-10:]):
     k0 = network.run(d)
-    result_de = denormalise(k0, max_.values.tolist()[-1], min_.values.tolist()[-1])
-    actual_de = denormalise(test_res[-10:][i], max_.values.tolist()[-1], min_.values.tolist()[-1])
+    result_de = denormalise(k0, max_min[0].values.tolist()[-1], max_min[1].values.tolist()[-1])
+    actual_de = denormalise(test_set_res[-10:][i], max_min[0].values.tolist()[-1], max_min[1].values.tolist()[-1])
     error = result_de - actual_de
     print('Predicted: {} | Actual: {} | Error: {}'.format(result_de, actual_de, np.abs(error)))
 
